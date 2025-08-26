@@ -333,7 +333,7 @@ namespace BitFab.KW1281Test
 
         public void SendBlock(List<byte> blockBytes)
         {
-            Thread.Sleep(25); // For better support of 4D0919035AJ
+            Thread.Sleep(1); // For better support of 4D0919035AJ
 
             var blockLength = (byte)(blockBytes.Count + 2);
 
@@ -729,6 +729,9 @@ namespace BitFab.KW1281Test
             GroupReadResponseWithTextBlock? textBlock = null;
 
             Log.WriteLine("[Up arrow | Down arrow | Q to quit]", LogDest.Console);
+
+            int millis = Environment.TickCount;
+
             while (true)
             {
                 if (Console.KeyAvailable)
@@ -754,14 +757,48 @@ namespace BitFab.KW1281Test
                     }
                 }
 
-                var bytes = new List<byte>
-                {
-                    (byte)(useBasicSetting ? BlockTitle.BasicSettingRead : BlockTitle.GroupRead),
-                    groupNumber
-                };
-                SendBlock(bytes);
+                var responseBlock = new Block[groupNumber];
+                string str = "";
+                int x = 1;
 
-                var responseBlock = ReceiveBlock();
+                for (byte i = 1; i < groupNumber; i++)
+                {
+                    var bytes = new List<byte>
+                    {
+                        (byte)(useBasicSetting ? BlockTitle.BasicSettingRead : BlockTitle.GroupRead),
+                        i
+                    };
+                    SendBlock(bytes);
+                    responseBlock[i-1] = ReceiveBlock();
+                }
+
+                foreach (var block in responseBlock)
+                {
+                    if (block is GroupReadResponseBlock groupReading)
+                    {
+                        str += ($"Group {x:D3}: {groupReading}   ");
+                    }
+                    else if (block is RawDataReadResponseBlock rawData)
+                    {
+                        if (textBlock != null && rawData.Body.Count > 0)
+                        {
+                            var sb = new StringBuilder($"Group {x:D3}: ");
+                            sb.Append(textBlock.GetText(rawData.Body[0]));
+                            sb.Append(Utils.DumpDecimal(rawData.Body.Skip(1)));
+                            str += sb.ToString();
+                        }
+                        else
+                        {
+                            str += ($"Group {x:D3}: {rawData}");
+                        }
+                    }
+                    x++;
+                }
+
+                Overlay(Convert.ToString(Environment.TickCount - millis) + "ms  " + str);
+                millis = Environment.TickCount;
+
+                /*
                 if (responseBlock is NakBlock)
                 {
                     Overlay($"Group {groupNumber:D3}: Not Available");
@@ -793,7 +830,7 @@ namespace BitFab.KW1281Test
                 {
                     Log.WriteLine($"Expected a Group Reading response block but received a ${responseBlock.Title:X2} block.");
                     return false;
-                }
+                }*/
             }
             Log.WriteLine(LogDest.Console);
 
@@ -881,7 +918,7 @@ namespace BitFab.KW1281Test
             /// Time to wait in milliseconds after receiving a byte from the ECU before sending the next byte.
             /// Valid range: 1-50ms (according to SAE J2818)
             /// </summary>
-            public const int R6 = 2;
+            public const int R6 = 1;
         }
 
         public IKwpCommon KwpCommon { get; }
